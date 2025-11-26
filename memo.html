@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>IndexedDB 메모장</title>
+</head>
+<body>
+  <h1>내 메모장</h1>
+  <textarea id="note" rows="5" cols="40" placeholder="메모를 입력하세요..."></textarea><br>
+  <button onclick="saveNote()">저장</button>
+  <button onclick="loadNotes()">불러오기</button>
+
+  <ul id="noteList"></ul>
+
+  <script>
+    // 데이터베이스 열기
+    const request = indexedDB.open("MyNoteDB", 1);
+
+    request.onupgradeneeded = function(event) {
+      const db = event.target.result;
+      db.createObjectStore("notes", { keyPath: "id", autoIncrement: true });
+    };
+
+    // 메모 저장하기
+    function saveNote() {
+      const text = document.getElementById("note").value;
+      const request = indexedDB.open("MyNoteDB", 1);
+      request.onsuccess = function(event) {
+        const db = event.target.result;
+        const tx = db.transaction("notes", "readwrite");
+        const store = tx.objectStore("notes");
+        store.add({ content: text, date: new Date() });
+        alert("메모가 저장되었습니다!");
+      };
+    }
+
+    // 메모 불러오기
+    function loadNotes() {
+      const request = indexedDB.open("MyNoteDB", 1);
+      request.onsuccess = function(event) {
+        const db = event.target.result;
+        const tx = db.transaction("notes", "readonly");
+        const store = tx.objectStore("notes");
+        const getAll = store.getAll();
+
+        getAll.onsuccess = function() {
+          const list = document.getElementById("noteList");
+          list.innerHTML = "";
+          getAll.result.forEach(note => {
+            const li = document.createElement("li");
+            li.textContent = `${note.date}: ${note.content}`;
+
+            // 수정 버튼
+            const editBtn = document.createElement("button");
+            editBtn.textContent = "수정";
+            editBtn.onclick = function() {
+              const newText = prompt("새로운 메모 내용을 입력하세요:", note.content);
+              if (newText) updateNote(note.id, newText);
+            };
+
+            // 삭제 버튼
+            const delBtn = document.createElement("button");
+            delBtn.textContent = "삭제";
+            delBtn.onclick = function() {
+              deleteNote(note.id);
+            };
+
+            li.appendChild(editBtn);
+            li.appendChild(delBtn);
+            list.appendChild(li);
+          });
+        };
+      };
+    }
+
+    // 메모 수정하기
+    function updateNote(id, newText) {
+      const request = indexedDB.open("MyNoteDB", 1);
+      request.onsuccess = function(event) {
+        const db = event.target.result;
+        const tx = db.transaction("notes", "readwrite");
+        const store = tx.objectStore("notes");
+        store.put({ id: id, content: newText, date: new Date() });
+        alert("메모가 수정되었습니다!");
+        loadNotes();
+      };
+    }
+
+    // 메모 삭제하기
+    function deleteNote(id) {
+      const request = indexedDB.open("MyNoteDB", 1);
+      request.onsuccess = function(event) {
+        const db = event.target.result;
+        const tx = db.transaction("notes", "readwrite");
+        const store = tx.objectStore("notes");
+        store.delete(id);
+        alert("메모가 삭제되었습니다!");
+        loadNotes();
+      };
+    }
+  </script>
+</body>
+</html>
