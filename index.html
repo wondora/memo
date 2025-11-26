@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IndexedDB 메모장</title>
+    <title>Firestore 메모장</title>
     <!-- Tailwind CSS 로딩 -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Pretendard 폰트 사용 */
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
         body {
             font-family: 'Pretendard', sans-serif;
-            background-color: #f3f4f6; /* 연한 회색 배경 */
+            background-color: #f3f4f6;
             min-height: 100vh;
         }
-        /* 메모 카드 레이아웃: 300px 최소 너비로 반응형 그리드 컬럼 설정 */
         #noteList {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
@@ -39,6 +37,7 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 10px rgba(0, 0, 0, 0.1);
         }
+        /* 메모 내용 줄 제한 없음 */
         .note-content {
             white-space: pre-wrap; 
             word-break: break-word; 
@@ -46,15 +45,7 @@
             margin-top: 8px;
             line-height: 1.5;
             color: #4b5563;
-            /* 메모리스트 박스 안에서 내용이 길어지면 3줄까지만 보여주고 ... 처리 */
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
-
-        /* 커스텀 모달 스타일 */
         .modal {
             position: fixed;
             top: 0;
@@ -76,7 +67,6 @@
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
             animation: fadeIn 0.3s ease-out;
         }
-
         @keyframes fadeIn {
             from { opacity: 0; transform: scale(0.9); }
             to { opacity: 1; transform: scale(1); }
@@ -86,18 +76,18 @@
 <body class="p-4 md:p-8">
 
     <div class="max-w-4xl mx-auto">
-        <h1 class="text-4xl font-bold text-gray-800 mb-8 text-center">📝 심플메모</h1>
+        <h1 class="text-4xl font-bold text-gray-800 mb-8 text-center">🔒 Firestore 메모장</h1>
 
         <!-- 메모 작성 영역 -->
         <div class="flex flex-col md:flex-row gap-4 mb-10 p-6 bg-white rounded-xl shadow-lg border border-gray-100">
             <!-- 입력 텍스트 영역 -->
-            <textarea id="note-input" rows="5" placeholder="새로운 메모를 입력하세요..." 
+            <textarea id="note-input" rows="5" placeholder="나만의 메모를 입력하세요... (이 메모는 사용자님께만 저장됩니다)" 
                       class="flex-grow p-4 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out resize-none"></textarea>
             
             <!-- 입력 버튼 -->
             <div class="flex md:flex-col items-stretch">
-                <button onclick="saveNote()" 
-                        class="w-full md:w-auto px-6 py-3 text-white font-semibold bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap">
+                <button onclick="saveNote()" id="save-note-btn"
+                        class="w-full md:w-auto px-6 py-3 text-white font-semibold bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap disabled:opacity-50" disabled>
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
                     </svg>
@@ -105,9 +95,12 @@
                 </button>
             </div>
         </div>
-
+        
+        <!-- 인증 상태 및 사용자 ID 표시 (비공개 경로임을 강조) -->
+        <p id="auth-status" class="text-center text-sm text-yellow-600 mb-4 font-semibold">인증 및 데이터베이스 연결 중... (현재 개인 메모 모드)</p>
+        
         <!-- 메모 리스트 제목 -->
-        <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">메모 목록</h2>
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">나만의 메모 목록</h2>
         
         <!-- 메모 리스트 (가운데 정렬) -->
         <div class="w-full">
@@ -123,7 +116,7 @@
         <p id="no-notes-message" class="text-center text-gray-500 mt-10 hidden">저장된 메모가 없습니다. 위에 메모를 작성해주세요!</p>
     </div>
 
-    <!-- 커스텀 수정 모달 (alert/prompt 대체) -->
+    <!-- 커스텀 수정 모달 -->
     <div id="edit-modal" class="modal">
         <div class="modal-content">
             <h3 class="text-xl font-bold mb-4">메모 수정</h3>
@@ -136,16 +129,26 @@
     </div>
 
 
-    <script>
-        // --- 1. 전역 상수 및 변수 설정 ---
-        const DB_NAME = "ModernNoteDB";
-        const DB_VERSION = 1;
-        const STORE_NAME = "notes";
-        const NOTES_PER_PAGE = 20; // 한 페이지당 20개 메모
+    <script type="module">
+        // --- Firebase UMD Imports ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        let db = null;
-        let allNotes = []; // 모든 메모를 저장할 배열
-        let currentPage = 1;
+        // 개발 중 Firestore 로그 확인용
+        // setLogLevel('debug'); 
+
+        // --- 1. 전역 상수 및 변수 설정 ---
+        const NOTES_PER_PAGE = 20; 
+
+        let app;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false; 
+        
+        let allNotes = []; 
+        let currentPage = 1; // 🚩 페이지네이션 상태
 
         const noteInput = document.getElementById("note-input");
         const noteList = document.getElementById("noteList");
@@ -154,163 +157,187 @@
         const editModal = document.getElementById('edit-modal');
         const editTextarea = document.getElementById('edit-text');
         const saveEditBtn = document.getElementById('save-edit-btn');
+        const saveNoteBtn = document.getElementById('save-note-btn');
+        const authStatus = document.getElementById('auth-status');
 
-        // --- 2. IndexedDB 초기화 및 열기 ---
-        function openDB() {
-            return new Promise((resolve, reject) => {
-                const request = indexedDB.open(DB_NAME, DB_VERSION);
-
-                request.onupgradeneeded = function(event) {
-                    db = event.target.result;
-                    // id를 KeyPath로 설정하고 자동 증가 (autoIncrement)
-                    db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
-                };
-
-                request.onsuccess = function(event) {
-                    db = event.target.result;
-                    resolve(db);
-                };
-
-                request.onerror = function(event) {
-                    console.error("IndexedDB 열기 오류:", event.target.errorCode);
-                    reject(event.target.error);
-                };
-            });
+        // --- 2. Firestore 컬렉션 참조 함수 (***비공개 경로 사용***) ---
+        function getNotesCollectionRef() {
+            if (!userId) {
+                // userId가 없으면 컬렉션에 접근 불가 (인증 완료 대기)
+                throw new Error("User ID is required for private collection reference.");
+            }
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            // 🚨 개인별 경로 사용: /artifacts/{appId}/users/{userId}/notes
+            return collection(db, `artifacts/${appId}/users/${userId}/notes`);
         }
 
-        // --- 3. 메모 저장 ---
-        async function saveNote() {
+
+        // --- 3. Firebase 초기화 및 인증 ---
+        async function initFirebase() {
+            try {
+                // Canvas 환경 변수 로드
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+                if (Object.keys(firebaseConfig).length === 0) {
+                     authStatus.textContent = "오류: Firebase 설정이 필요합니다.";
+                     return;
+                }
+                
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // 세션 유지를 위해 persistence 설정
+                await setPersistence(auth, browserSessionPersistence);
+
+
+                // 3-1. 인증 상태 확인 및 처리
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isAuthReady = true;
+                        // 사용자 ID를 표시 (비공개 경로임을 명시)
+                        authStatus.textContent = `✅ 연결됨 - 비공개 모드 (User ID: ${userId})`;
+                        saveNoteBtn.disabled = false;
+                        loadNotesRealtime(); // 인증 후 실시간 로드 시작
+                    } else {
+                        // 사용자 토큰이 있으면 사용하고, 없으면 익명 로그인 시도
+                        if (initialAuthToken) {
+                             await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                             await signInAnonymously(auth);
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase 초기화/인증 오류:", error);
+                authStatus.textContent = "오류: Firebase 연결에 실패했습니다.";
+                showToast("Firebase 연결 실패. 콘솔을 확인하세요.", 'bg-red-700');
+            }
+        }
+
+        // --- 4. 메모 저장 (Create) ---
+        // window에 할당하여 HTML의 onclick에서 접근할 수 있도록 수정
+        window.saveNote = async function() {
+            if (!isAuthReady || !userId) {
+                showToast("사용자 인증 대기 중이거나 로그인되지 않았습니다.", 'bg-yellow-500');
+                return;
+            }
+
             const text = noteInput.value.trim();
             if (!text) {
                 showToast("메모 내용을 입력해주세요.", 'bg-red-500');
                 return;
             }
-
-            if (!db) await openDB();
-
-            const tx = db.transaction(STORE_NAME, "readwrite");
-            const store = tx.objectStore(STORE_NAME);
-
-            // 날짜는 ISO 문자열로 저장하여 정렬 및 파싱 용이하게 함
-            const addRequest = store.add({ content: text, date: new Date().toISOString() });
-
-            tx.oncomplete = function() {
-                noteInput.value = ""; // 입력창 초기화
+            
+            try {
+                // Firestore에 저장할 데이터
+                const newNote = { 
+                    content: text, 
+                    date: new Date().toISOString(), // 정렬용 ISO String
+                    creatorId: userId // 누가 만들었는지 기록 (보안 규칙 검증용)
+                };
+                
+                // 🚨 getNotesCollectionRef()는 개인 경로를 반환합니다.
+                await addDoc(getNotesCollectionRef(), newNote);
+                
+                noteInput.value = ""; 
                 showToast("메모가 성공적으로 저장되었습니다.");
-                // 저장 후에는 첫 페이지로 이동하여 최신 메모를 바로 보여줌
-                currentPage = 1; 
-                loadNotes(); 
-            };
-            tx.onerror = function(event) {
-                console.error("메모 저장 오류:", event.target.error);
-                showToast("메모 저장에 실패했습니다.", 'bg-red-500');
-            };
-        }
-
-        // --- 4. 메모 수정 (ID 기반) ---
-        async function updateNote(id, newText) {
-            if (!db) await openDB();
-
-            const tx = db.transaction(STORE_NAME, "readwrite");
-            const store = tx.objectStore(STORE_NAME);
-
-            // 해당 ID의 메모를 가져와서 내용을 업데이트하고 다시 put
-            const getRequest = store.get(id);
-
-            getRequest.onsuccess = function() {
-                const note = getRequest.result;
-                if (note) {
-                    note.content = newText;
-                    note.date = new Date().toISOString(); // 수정된 시간 업데이트
-                    const updateRequest = store.put(note);
-
-                    updateRequest.onsuccess = function() {
-                        showToast("메모가 수정되었습니다.");
-                        loadNotes(); // 목록 새로고침
-                        closeModal();
-                    };
-                    updateRequest.onerror = function(event) {
-                        console.error("메모 수정 put 오류:", event.target.error);
-                        showToast("메모 수정에 실패했습니다.", 'bg-red-500');
-                    };
-                }
-            };
-            getRequest.onerror = function(event) {
-                 console.error("메모 수정 get 오류:", event.target.error);
-                 showToast("수정할 메모를 찾지 못했습니다.", 'bg-red-500');
+                // 새 메모가 추가되면 첫 페이지로 이동하여 즉시 보이게 함
+                currentPage = 1;
+            } catch (error) {
+                // 보안 규칙 위반 시 여기에 오류가 표시됩니다.
+                console.error("메모 저장 오류:", error);
+                showToast("메모 저장에 실패했습니다. (권한 오류 가능성)", 'bg-red-500');
             }
         }
 
-        // --- 5. 메모 삭제 (ID 기반) ---
-        async function deleteNote(id) {
-            // alert/prompt 대신 커스텀 모달 사용 (여기서는 window.confirm으로 대체)
-            if (!window.confirm("정말로 이 메모를 삭제하시겠습니까?")) return; 
+        // --- 5. 메모 수정 (Update) ---
+        // window에 할당하여 버튼에서 접근할 수 있도록 수정
+        window.updateNote = async function(noteId, newText) {
+            if (!isAuthReady || !userId) return;
 
-            if (!db) await openDB();
-
-            const tx = db.transaction(STORE_NAME, "readwrite");
-            const store = tx.objectStore(STORE_NAME);
-            
-            const deleteRequest = store.delete(id);
-
-            deleteRequest.onsuccess = function() {
-                showToast("메모가 삭제되었습니다.");
+            try {
+                // 🚨 개인 경로에서 해당 메모 문서 참조
+                const noteRef = doc(getNotesCollectionRef(), noteId);
                 
-                // 삭제 후 페이지네이션 조정 (allNotes는 loadNotes에서 갱신됨)
-                const totalNotesBeforeDeletion = allNotes.length;
-                const totalPages = Math.ceil((totalNotesBeforeDeletion - 1) / NOTES_PER_PAGE);
-
-                if (currentPage > totalPages && totalPages > 0) {
-                    currentPage = totalPages;
-                } else if (totalNotesBeforeDeletion === 1) {
-                    currentPage = 1;
-                }
-
-                loadNotes(); // 목록 새로고침
-            };
-            deleteRequest.onerror = function(event) {
-                console.error("메모 삭제 오류:", event.target.error);
-                showToast("메모 삭제에 실패했습니다.", 'bg-red-500');
-            };
+                await updateDoc(noteRef, {
+                    content: newText,
+                    date: new Date().toISOString() // 수정 시간 업데이트
+                });
+                
+                showToast("메모가 수정되었습니다.");
+                window.closeModal();
+            } catch (error) {
+                console.error("메모 수정 오류:", error);
+                showToast("메모 수정에 실패했습니다. (권한 없음)", 'bg-red-500');
+            }
         }
 
-        // --- 6. 메모 불러오기 및 페이지네이션 ---
-        async function loadNotes() {
-            if (!db) await openDB();
+        // --- 6. 메모 삭제 (Delete) ---
+        // window에 할당하여 버튼에서 접근할 수 있도록 수정
+        window.deleteNote = async function(noteId) {
+            if (!isAuthReady || !userId) return;
 
-            const tx = db.transaction(STORE_NAME, "readonly");
-            const store = tx.objectStore(STORE_NAME);
-            const getAll = store.getAll();
-
-            getAll.onsuccess = function() {
-                // ID (저장 순서) 기준 내림차순 정렬하여 최신 메모가 위에 오도록 함
-                allNotes = getAll.result.sort((a, b) => b.id - a.id);
+            try {
+                // 🚨 개인 경로에서 해당 메모 문서 참조
+                const noteRef = doc(getNotesCollectionRef(), noteId);
+                await deleteDoc(noteRef);
                 
-                // 메모 유무에 따른 메시지 표시
+                showToast("메모가 삭제되었습니다.");
+            } catch (error) {
+                console.error("메모 삭제 오류:", error);
+                showToast("메모 삭제에 실패했습니다. (권한 없음)", 'bg-red-500');
+            }
+        }
+
+        // --- 7. 메모 실시간 불러오기 (Read - Realtime Snapshot) ---
+        function loadNotesRealtime() {
+            // 인증이 완료되고 userId가 확보된 후에만 실행
+            if (!db || !isAuthReady || !userId) return;
+
+            // 🚨 getNotesCollectionRef()는 개인 경로를 반환합니다.
+            onSnapshot(getNotesCollectionRef(), (querySnapshot) => {
+                const fetchedNotes = [];
+                querySnapshot.forEach((doc) => {
+                    // ID가 아닌, Firestore에 저장된 문서 ID를 사용합니다.
+                    fetchedNotes.push({ id: doc.id, ...doc.data() });
+                });
+
+                // 클라이언트 측 정렬 (Date 기준 내림차순)
+                allNotes = fetchedNotes.sort((a, b) => {
+                    const dateA = new Date(a.date);
+                    const dateB = new Date(b.date);
+                    return dateB - dateA;
+                });
+                
                 if (allNotes.length === 0) {
                     noteList.innerHTML = '';
                     noNotesMessage.classList.remove('hidden');
                     paginationControls.innerHTML = '';
-                    return;
+                } else {
+                    noNotesMessage.classList.add('hidden');
+                    window.renderNotes();
+                    window.renderPagination();
                 }
-                noNotesMessage.classList.add('hidden');
-
-                renderNotes();
-                renderPagination();
-            };
-            getAll.onerror = function(event) {
-                console.error("메모 불러오기 오류:", event.target.error);
-                showToast("메모 목록을 불러오는 데 실패했습니다.", 'bg-red-500');
-            }
+            }, (error) => {
+                // 보안 규칙을 위반하면 이 오류가 발생합니다.
+                console.error("Firestore 실시간 리스너 오류:", error);
+                showToast("메모 목록 불러오기에 실패했습니다. (보안 규칙 확인)", 'bg-red-500');
+            });
         }
         
-        // --- 7. 현재 페이지의 메모만 렌더링 ---
-        function renderNotes() {
+        // --- 8. UI 렌더링 및 페이지네이션 ---
+
+        // 🚩 window에 할당하여 전역 접근 가능하게 함
+        window.renderNotes = function() {
             noteList.innerHTML = "";
             const totalNotes = allNotes.length;
             const totalPages = Math.ceil(totalNotes / NOTES_PER_PAGE);
             
-            // 현재 페이지 유효성 검사 및 조정
+            // 페이지 인덱스 보정
             if (currentPage > totalPages) currentPage = totalPages || 1;
             if (currentPage < 1) currentPage = 1;
 
@@ -322,13 +349,15 @@
                 const li = document.createElement("li");
                 li.className = 'note-card';
 
-                // 날짜 포맷: 년-월-일만 표시
                 const dateObj = new Date(note.date);
                 const dateString = dateObj.toLocaleDateString('ko-KR', {
                     year: 'numeric',
                     month: '2-digit',
                     day: '2-digit'
                 }).replace(/\s/g, '').replace(/\.$/, '');
+                
+                // URI 인코딩 사용: 메모 내용의 특수문자 오류 방지
+                const encodedContent = encodeURIComponent(note.content);
 
                 li.innerHTML = `
                     <div class="flex flex-col flex-grow">
@@ -336,41 +365,26 @@
                         <p class="note-content">${note.content}</p>
                     </div>
                     <div class="flex justify-end gap-2 mt-4">
-                        <button class="edit-btn px-3 py-1 text-sm text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition" data-id="${note.id}" data-content="${note.content}">수정</button>
-                        <button class="delete-btn px-3 py-1 text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 transition" data-id="${note.id}">삭제</button>
+                        <button class="edit-btn px-3 py-1 text-sm text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition" data-id="${note.id}" onclick="openEditModal('${note.id}', '${encodedContent}')">수정</button>
+                        <button class="delete-btn px-3 py-1 text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 transition" data-id="${note.id}" onclick="deleteNote('${note.id}')">삭제</button>
                     </div>
                 `;
                 noteList.appendChild(li);
             });
 
-            // 이벤트 리스너를 동적으로 추가하여 수정/삭제 기능 연결
-            document.querySelectorAll('.edit-btn').forEach(button => {
-                button.onclick = function() {
-                    const id = parseInt(this.getAttribute('data-id'));
-                    const content = this.getAttribute('data-content');
-                    openEditModal(id, content);
-                };
-            });
-
-            document.querySelectorAll('.delete-btn').forEach(button => {
-                button.onclick = function() {
-                    deleteNote(parseInt(this.getAttribute('data-id')));
-                };
-            });
+            window.renderPagination();
         }
 
-        // --- 8. 페이지네이션 컨트롤 렌더링 ---
-        function renderPagination() {
+        // 🚩 window에 할당하여 전역 접근 가능하게 함
+        window.renderPagination = function() {
             paginationControls.innerHTML = "";
             const totalPages = Math.ceil(allNotes.length / NOTES_PER_PAGE);
 
             if (totalPages <= 1) return;
 
-            // 이전 페이지 버튼
             const prevBtn = createPageButton('이전', currentPage - 1, currentPage > 1);
             paginationControls.appendChild(prevBtn);
 
-            // 페이지 번호 버튼 (중앙에 현재 페이지를 두고 주변 페이지를 표시)
             let startPage = Math.max(1, currentPage - 3);
             let endPage = Math.min(totalPages, currentPage + 3);
 
@@ -383,15 +397,16 @@
                 paginationControls.appendChild(pageBtn);
             }
 
-            // 다음 페이지 버튼
             const nextBtn = createPageButton('다음', currentPage + 1, currentPage < totalPages);
             paginationControls.appendChild(nextBtn);
         }
 
-        // 페이지네이션 버튼 생성 유틸리티
         function createPageButton(text, pageIndex, isEnabled, isActive = false) {
             const button = document.createElement('button');
             button.textContent = text;
+            // 🚩 isEnabled가 false일 때만 disabled 속성을 추가
+            button.disabled = !isEnabled; 
+
             button.className = `px-3 py-1 rounded-lg text-sm font-medium transition ${
                 isActive 
                     ? 'bg-indigo-600 text-white shadow-md' 
@@ -399,47 +414,47 @@
             } ${isEnabled ? '' : 'opacity-50 cursor-not-allowed'}`;
 
             if (isEnabled) {
-                button.onclick = () => {
+                // 🚩 .onclick 대신 addEventListener를 사용해 이벤트 연결 안정성 확보
+                button.addEventListener('click', () => {
+                    // 디버깅용 로그: 클릭 이벤트 확인
+                    console.log(`페이지 버튼 클릭: ${pageIndex} (현재 페이지: ${currentPage})`);
+                    
                     currentPage = pageIndex;
-                    // 페이지 이동 후 스크롤을 맨 위로 올림
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                    renderNotes();
-                    renderPagination();
-                };
+                    // 전역 함수 호출
+                    window.renderNotes(); 
+                    window.renderPagination();
+                });
             }
             return button;
         }
 
         // --- 9. 커스텀 UI/메시지 함수 ---
-
-        // 커스텀 모달 열기 (수정 버튼 클릭 시)
-        function openEditModal(id, content) {
+        window.openEditModal = function(id, encodedContent) {
+            // URI 디코딩 적용
+            const content = decodeURIComponent(encodedContent);
+            
             editTextarea.value = content;
             editModal.style.display = 'flex';
             
-            // 기존 리스너 제거 후 새 리스너 추가 (이벤트 중복 방지)
-            const oldSaveBtn = saveEditBtn;
-            const newSaveEditBtn = oldSaveBtn.cloneNode(true);
-            oldSaveBtn.parentNode.replaceChild(newSaveEditBtn, oldSaveBtn);
-
-            newSaveEditBtn.onclick = function() {
+            // 기존 버튼에 onclick 핸들러를 직접 덮어쓰기
+            saveEditBtn.onclick = function() {
                 const newText = editTextarea.value.trim();
+                // window.updateNote를 직접 호출
                 if (newText && newText !== content.trim()) {
-                    updateNote(id, newText);
+                    window.updateNote(id, newText);
                 } else {
-                    closeModal(); // 내용 변경 없으면 닫기
+                    window.closeModal();
                 }
             };
             
             editTextarea.focus(); 
         }
 
-        // 커스텀 모달 닫기
-        function closeModal() {
+        window.closeModal = function() {
             editModal.style.display = 'none';
         }
 
-        // 토스트 메시지 표시 (alert 대체)
         function showToast(message, bgColor = 'bg-indigo-500') {
             let toast = document.getElementById('custom-toast');
             if (!toast) {
@@ -459,13 +474,7 @@
         }
 
         // --- 10. 초기화 ---
-        // IndexedDB를 열고 메모 목록을 로드합니다.
-        openDB().then(() => {
-            loadNotes();
-        }).catch(error => {
-            console.error("초기화 실패:", error);
-            showToast("데이터베이스 초기화에 실패했습니다. 브라우저 설정을 확인해주세요.", 'bg-red-700');
-        });
+        initFirebase();
 
     </script>
 </body>
