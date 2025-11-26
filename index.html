@@ -1,103 +1,472 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>IndexedDB 메모장</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IndexedDB 메모장</title>
+    <!-- Tailwind CSS 로딩 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Pretendard 폰트 사용 */
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #f3f4f6; /* 연한 회색 배경 */
+            min-height: 100vh;
+        }
+        /* 메모 카드 레이아웃: 300px 최소 너비로 반응형 그리드 컬럼 설정 */
+        #noteList {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
+            gap: 20px;
+            padding: 20px 0;
+            list-style: none;
+            margin: 0 auto; 
+        }
+        .note-card {
+            border: 1px solid #e5e7eb;
+            background-color: white;
+            padding: 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 150px;
+            transition: transform 0.2s;
+        }
+        .note-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.1);
+        }
+        .note-content {
+            white-space: pre-wrap; 
+            word-break: break-word; 
+            flex-grow: 1;
+            margin-top: 8px;
+            line-height: 1.5;
+            color: #4b5563;
+            /* 메모리스트 박스 안에서 내용이 길어지면 3줄까지만 보여주고 ... 처리 */
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 커스텀 모달 스타일 */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: none; 
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+    </style>
 </head>
-<body>
-  <h1>내 메모장</h1>
-  <textarea id="note" rows="5" cols="40" placeholder="메모를 입력하세요..."></textarea><br>
-  <button onclick="saveNote()">저장</button>
-  <button onclick="loadNotes()">불러오기</button>
+<body class="p-4 md:p-8">
 
-  <ul id="noteList"></ul>
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-4xl font-bold text-gray-800 mb-8 text-center">📝 심플 메모장 (IndexedDB)</h1>
 
-  <script>
-    // 데이터베이스 열기
-    const request = indexedDB.open("MyNoteDB", 1);
+        <!-- 메모 작성 영역 -->
+        <div class="flex flex-col md:flex-row gap-4 mb-10 p-6 bg-white rounded-xl shadow-lg border border-gray-100">
+            <!-- 입력 텍스트 영역 -->
+            <textarea id="note-input" rows="5" placeholder="새로운 메모를 입력하세요..." 
+                      class="flex-grow p-4 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out resize-none"></textarea>
+            
+            <!-- 입력 버튼 -->
+            <div class="flex md:flex-col items-stretch">
+                <button onclick="saveNote()" 
+                        class="w-full md:w-auto px-6 py-3 text-white font-semibold bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
+                    </svg>
+                    입력
+                </button>
+            </div>
+        </div>
 
-    request.onupgradeneeded = function(event) {
-      const db = event.target.result;
-      db.createObjectStore("notes", { keyPath: "id", autoIncrement: true });
-    };
+        <!-- 메모 리스트 제목 -->
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">메모 목록</h2>
+        
+        <!-- 메모 리스트 (가운데 정렬) -->
+        <div class="w-full">
+            <ul id="noteList" class="mx-auto">
+                <!-- 메모 카드가 여기에 렌더링됩니다 -->
+            </ul>
+        </div>
+        
+        <!-- 페이지 네이션 영역 -->
+        <div id="pagination-controls" class="flex justify-center items-center gap-2 mt-6">
+            <!-- 페이지 버튼이 여기에 렌더링됩니다 -->
+        </div>
+        <p id="no-notes-message" class="text-center text-gray-500 mt-10 hidden">저장된 메모가 없습니다. 위에 메모를 작성해주세요!</p>
+    </div>
 
-    // 메모 저장하기
-    function saveNote() {
-      const text = document.getElementById("note").value;
-      const request = indexedDB.open("MyNoteDB", 1);
-      request.onsuccess = function(event) {
-        const db = event.target.result;
-        const tx = db.transaction("notes", "readwrite");
-        const store = tx.objectStore("notes");
-        store.add({ content: text, date: new Date() });
-        alert("메모가 저장되었습니다!");
-      };
-    }
+    <!-- 커스텀 수정 모달 (alert/prompt 대체) -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <h3 class="text-xl font-bold mb-4">메모 수정</h3>
+            <textarea id="edit-text" rows="8" class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-indigo-500 focus:border-indigo-500 resize-none"></textarea>
+            <div class="flex justify-end gap-3">
+                <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">취소</button>
+                <button id="save-edit-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">수정 완료</button>
+            </div>
+        </div>
+    </div>
 
-    // 메모 불러오기
-    function loadNotes() {
-      const request = indexedDB.open("MyNoteDB", 1);
-      request.onsuccess = function(event) {
-        const db = event.target.result;
-        const tx = db.transaction("notes", "readonly");
-        const store = tx.objectStore("notes");
-        const getAll = store.getAll();
 
-        getAll.onsuccess = function() {
-          const list = document.getElementById("noteList");
-          list.innerHTML = "";
-          getAll.result.forEach(note => {
-            const li = document.createElement("li");
-            li.textContent = `${note.date}: ${note.content}`;
+    <script>
+        // --- 1. 전역 상수 및 변수 설정 ---
+        const DB_NAME = "ModernNoteDB";
+        const DB_VERSION = 1;
+        const STORE_NAME = "notes";
+        const NOTES_PER_PAGE = 20; // 한 페이지당 20개 메모
 
-            // 수정 버튼
-            const editBtn = document.createElement("button");
-            editBtn.textContent = "수정";
-            editBtn.onclick = function() {
-              const newText = prompt("새로운 메모 내용을 입력하세요:", note.content);
-              if (newText) updateNote(note.id, newText);
+        let db = null;
+        let allNotes = []; // 모든 메모를 저장할 배열
+        let currentPage = 1;
+
+        const noteInput = document.getElementById("note-input");
+        const noteList = document.getElementById("noteList");
+        const paginationControls = document.getElementById("pagination-controls");
+        const noNotesMessage = document.getElementById('no-notes-message');
+        const editModal = document.getElementById('edit-modal');
+        const editTextarea = document.getElementById('edit-text');
+        const saveEditBtn = document.getElementById('save-edit-btn');
+
+        // --- 2. IndexedDB 초기화 및 열기 ---
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onupgradeneeded = function(event) {
+                    db = event.target.result;
+                    // id를 KeyPath로 설정하고 자동 증가 (autoIncrement)
+                    db.createObjectStore(STORE_NAME, { keyPath: "id", autoIncrement: true });
+                };
+
+                request.onsuccess = function(event) {
+                    db = event.target.result;
+                    resolve(db);
+                };
+
+                request.onerror = function(event) {
+                    console.error("IndexedDB 열기 오류:", event.target.errorCode);
+                    reject(event.target.error);
+                };
+            });
+        }
+
+        // --- 3. 메모 저장 ---
+        async function saveNote() {
+            const text = noteInput.value.trim();
+            if (!text) {
+                showToast("메모 내용을 입력해주세요.", 'bg-red-500');
+                return;
+            }
+
+            if (!db) await openDB();
+
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+
+            // 날짜는 ISO 문자열로 저장하여 정렬 및 파싱 용이하게 함
+            const addRequest = store.add({ content: text, date: new Date().toISOString() });
+
+            tx.oncomplete = function() {
+                noteInput.value = ""; // 입력창 초기화
+                showToast("메모가 성공적으로 저장되었습니다.");
+                // 저장 후에는 첫 페이지로 이동하여 최신 메모를 바로 보여줌
+                currentPage = 1; 
+                loadNotes(); 
             };
-
-            // 삭제 버튼
-            const delBtn = document.createElement("button");
-            delBtn.textContent = "삭제";
-            delBtn.onclick = function() {
-              deleteNote(note.id);
+            tx.onerror = function(event) {
+                console.error("메모 저장 오류:", event.target.error);
+                showToast("메모 저장에 실패했습니다.", 'bg-red-500');
             };
+        }
 
-            li.appendChild(editBtn);
-            li.appendChild(delBtn);
-            list.appendChild(li);
-          });
-        };
-      };
-    }
+        // --- 4. 메모 수정 (ID 기반) ---
+        async function updateNote(id, newText) {
+            if (!db) await openDB();
 
-    // 메모 수정하기
-    function updateNote(id, newText) {
-      const request = indexedDB.open("MyNoteDB", 1);
-      request.onsuccess = function(event) {
-        const db = event.target.result;
-        const tx = db.transaction("notes", "readwrite");
-        const store = tx.objectStore("notes");
-        store.put({ id: id, content: newText, date: new Date() });
-        alert("메모가 수정되었습니다!");
-        loadNotes();
-      };
-    }
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
 
-    // 메모 삭제하기
-    function deleteNote(id) {
-      const request = indexedDB.open("MyNoteDB", 1);
-      request.onsuccess = function(event) {
-        const db = event.target.result;
-        const tx = db.transaction("notes", "readwrite");
-        const store = tx.objectStore("notes");
-        store.delete(id);
-        alert("메모가 삭제되었습니다!");
-        loadNotes();
-      };
-    }
-  </script>
+            // 해당 ID의 메모를 가져와서 내용을 업데이트하고 다시 put
+            const getRequest = store.get(id);
+
+            getRequest.onsuccess = function() {
+                const note = getRequest.result;
+                if (note) {
+                    note.content = newText;
+                    note.date = new Date().toISOString(); // 수정된 시간 업데이트
+                    const updateRequest = store.put(note);
+
+                    updateRequest.onsuccess = function() {
+                        showToast("메모가 수정되었습니다.");
+                        loadNotes(); // 목록 새로고침
+                        closeModal();
+                    };
+                    updateRequest.onerror = function(event) {
+                        console.error("메모 수정 put 오류:", event.target.error);
+                        showToast("메모 수정에 실패했습니다.", 'bg-red-500');
+                    };
+                }
+            };
+            getRequest.onerror = function(event) {
+                 console.error("메모 수정 get 오류:", event.target.error);
+                 showToast("수정할 메모를 찾지 못했습니다.", 'bg-red-500');
+            }
+        }
+
+        // --- 5. 메모 삭제 (ID 기반) ---
+        async function deleteNote(id) {
+            // alert/prompt 대신 커스텀 모달 사용 (여기서는 window.confirm으로 대체)
+            if (!window.confirm("정말로 이 메모를 삭제하시겠습니까?")) return; 
+
+            if (!db) await openDB();
+
+            const tx = db.transaction(STORE_NAME, "readwrite");
+            const store = tx.objectStore(STORE_NAME);
+            
+            const deleteRequest = store.delete(id);
+
+            deleteRequest.onsuccess = function() {
+                showToast("메모가 삭제되었습니다.");
+                
+                // 삭제 후 페이지네이션 조정 (allNotes는 loadNotes에서 갱신됨)
+                const totalNotesBeforeDeletion = allNotes.length;
+                const totalPages = Math.ceil((totalNotesBeforeDeletion - 1) / NOTES_PER_PAGE);
+
+                if (currentPage > totalPages && totalPages > 0) {
+                    currentPage = totalPages;
+                } else if (totalNotesBeforeDeletion === 1) {
+                    currentPage = 1;
+                }
+
+                loadNotes(); // 목록 새로고침
+            };
+            deleteRequest.onerror = function(event) {
+                console.error("메모 삭제 오류:", event.target.error);
+                showToast("메모 삭제에 실패했습니다.", 'bg-red-500');
+            };
+        }
+
+        // --- 6. 메모 불러오기 및 페이지네이션 ---
+        async function loadNotes() {
+            if (!db) await openDB();
+
+            const tx = db.transaction(STORE_NAME, "readonly");
+            const store = tx.objectStore(STORE_NAME);
+            const getAll = store.getAll();
+
+            getAll.onsuccess = function() {
+                // ID (저장 순서) 기준 내림차순 정렬하여 최신 메모가 위에 오도록 함
+                allNotes = getAll.result.sort((a, b) => b.id - a.id);
+                
+                // 메모 유무에 따른 메시지 표시
+                if (allNotes.length === 0) {
+                    noteList.innerHTML = '';
+                    noNotesMessage.classList.remove('hidden');
+                    paginationControls.innerHTML = '';
+                    return;
+                }
+                noNotesMessage.classList.add('hidden');
+
+                renderNotes();
+                renderPagination();
+            };
+            getAll.onerror = function(event) {
+                console.error("메모 불러오기 오류:", event.target.error);
+                showToast("메모 목록을 불러오는 데 실패했습니다.", 'bg-red-500');
+            }
+        }
+        
+        // --- 7. 현재 페이지의 메모만 렌더링 ---
+        function renderNotes() {
+            noteList.innerHTML = "";
+            const totalNotes = allNotes.length;
+            const totalPages = Math.ceil(totalNotes / NOTES_PER_PAGE);
+            
+            // 현재 페이지 유효성 검사 및 조정
+            if (currentPage > totalPages) currentPage = totalPages || 1;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * NOTES_PER_PAGE;
+            const endIndex = Math.min(startIndex + NOTES_PER_PAGE, totalNotes);
+            const notesToShow = allNotes.slice(startIndex, endIndex);
+
+            notesToShow.forEach(note => {
+                const li = document.createElement("li");
+                li.className = 'note-card';
+
+                // 날짜 포맷: 년-월-일만 표시
+                const dateObj = new Date(note.date);
+                const dateString = dateObj.toLocaleDateString('ko-KR', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }).replace(/\s/g, '').replace(/\.$/, '');
+
+                li.innerHTML = `
+                    <div class="flex flex-col flex-grow">
+                        <p class="text-xs font-semibold text-indigo-500 mb-2">${dateString}</p>
+                        <p class="note-content">${note.content}</p>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button class="edit-btn px-3 py-1 text-sm text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition" data-id="${note.id}" data-content="${note.content}">수정</button>
+                        <button class="delete-btn px-3 py-1 text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 transition" data-id="${note.id}">삭제</button>
+                    </div>
+                `;
+                noteList.appendChild(li);
+            });
+
+            // 이벤트 리스너를 동적으로 추가하여 수정/삭제 기능 연결
+            document.querySelectorAll('.edit-btn').forEach(button => {
+                button.onclick = function() {
+                    const id = parseInt(this.getAttribute('data-id'));
+                    const content = this.getAttribute('data-content');
+                    openEditModal(id, content);
+                };
+            });
+
+            document.querySelectorAll('.delete-btn').forEach(button => {
+                button.onclick = function() {
+                    deleteNote(parseInt(this.getAttribute('data-id')));
+                };
+            });
+        }
+
+        // --- 8. 페이지네이션 컨트롤 렌더링 ---
+        function renderPagination() {
+            paginationControls.innerHTML = "";
+            const totalPages = Math.ceil(allNotes.length / NOTES_PER_PAGE);
+
+            if (totalPages <= 1) return;
+
+            // 이전 페이지 버튼
+            const prevBtn = createPageButton('이전', currentPage - 1, currentPage > 1);
+            paginationControls.appendChild(prevBtn);
+
+            // 페이지 번호 버튼 (중앙에 현재 페이지를 두고 주변 페이지를 표시)
+            let startPage = Math.max(1, currentPage - 3);
+            let endPage = Math.min(totalPages, currentPage + 3);
+
+            if (currentPage <= 4) endPage = Math.min(totalPages, 7);
+            if (currentPage > totalPages - 3) startPage = Math.max(1, totalPages - 6);
+
+
+            for (let i = startPage; i <= endPage; i++) {
+                const pageBtn = createPageButton(i, i, true, i === currentPage);
+                paginationControls.appendChild(pageBtn);
+            }
+
+            // 다음 페이지 버튼
+            const nextBtn = createPageButton('다음', currentPage + 1, currentPage < totalPages);
+            paginationControls.appendChild(nextBtn);
+        }
+
+        // 페이지네이션 버튼 생성 유틸리티
+        function createPageButton(text, pageIndex, isEnabled, isActive = false) {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.className = `px-3 py-1 rounded-lg text-sm font-medium transition ${
+                isActive 
+                    ? 'bg-indigo-600 text-white shadow-md' 
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-indigo-50 hover:text-indigo-600'
+            } ${isEnabled ? '' : 'opacity-50 cursor-not-allowed'}`;
+
+            if (isEnabled) {
+                button.onclick = () => {
+                    currentPage = pageIndex;
+                    // 페이지 이동 후 스크롤을 맨 위로 올림
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    renderNotes();
+                    renderPagination();
+                };
+            }
+            return button;
+        }
+
+        // --- 9. 커스텀 UI/메시지 함수 ---
+
+        // 커스텀 모달 열기 (수정 버튼 클릭 시)
+        function openEditModal(id, content) {
+            editTextarea.value = content;
+            editModal.style.display = 'flex';
+            
+            // 기존 리스너 제거 후 새 리스너 추가 (이벤트 중복 방지)
+            const oldSaveBtn = saveEditBtn;
+            const newSaveEditBtn = oldSaveBtn.cloneNode(true);
+            oldSaveBtn.parentNode.replaceChild(newSaveEditBtn, oldSaveBtn);
+
+            newSaveEditBtn.onclick = function() {
+                const newText = editTextarea.value.trim();
+                if (newText && newText !== content.trim()) {
+                    updateNote(id, newText);
+                } else {
+                    closeModal(); // 내용 변경 없으면 닫기
+                }
+            };
+            
+            editTextarea.focus(); 
+        }
+
+        // 커스텀 모달 닫기
+        function closeModal() {
+            editModal.style.display = 'none';
+        }
+
+        // 토스트 메시지 표시 (alert 대체)
+        function showToast(message, bgColor = 'bg-indigo-500') {
+            let toast = document.getElementById('custom-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'custom-toast';
+                toast.className = 'fixed bottom-5 left-1/2 transform -translate-x-1/2 p-3 rounded-lg text-white shadow-xl transition-opacity duration-300 z-50';
+                document.body.appendChild(toast);
+            }
+            
+            toast.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 p-3 rounded-lg text-white shadow-xl transition-opacity duration-300 z-50 ${bgColor}`;
+            toast.textContent = message;
+            toast.style.opacity = '1';
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+            }, 3000);
+        }
+
+        // --- 10. 초기화 ---
+        // IndexedDB를 열고 메모 목록을 로드합니다.
+        openDB().then(() => {
+            loadNotes();
+        }).catch(error => {
+            console.error("초기화 실패:", error);
+            showToast("데이터베이스 초기화에 실패했습니다. 브라우저 설정을 확인해주세요.", 'bg-red-700');
+        });
+
+    </script>
 </body>
 </html>
