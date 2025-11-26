@@ -132,11 +132,23 @@
     <script type="module">
         // --- Firebase UMD Imports ---
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        // signInWithCustomToken은 일반 웹 배포 시 제거합니다.
+        import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // 개발 중 Firestore 로그 확인용
         // setLogLevel('debug'); 
+
+        // 🚨🚨🚨 [중요] 사용자가 제공한 실제 Firebase 설정 값을 직접 입력했습니다. 🚨🚨🚨
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyBq4P9oCU6pzJFRv_xxJyvG9moYjlHTeys",           
+            authDomain: "memo-f8ef8.firebaseapp.com",  
+            projectId: "memo-f8ef8",     
+            storageBucket: "memo-f8ef8.firebasestorage.app",
+            messagingSenderId: "92169207764",
+            appId: "1:92169207764:web:b2b078dcfe8d38dcf62041",
+            measurementId: "G-X6GT0JDL7S" 
+        };
 
         // --- 1. 전역 상수 및 변수 설정 ---
         const NOTES_PER_PAGE = 20; 
@@ -148,7 +160,7 @@
         let isAuthReady = false; 
         
         let allNotes = []; 
-        let currentPage = 1; // 🚩 페이지네이션 상태
+        let currentPage = 1; 
 
         const noteInput = document.getElementById("note-input");
         const noteList = document.getElementById("noteList");
@@ -160,31 +172,26 @@
         const saveNoteBtn = document.getElementById('save-note-btn');
         const authStatus = document.getElementById('auth-status');
 
-        // --- 2. Firestore 컬렉션 참조 함수 (***비공개 경로 사용***) ---
+        // --- 2. Firestore 컬렉션 참조 함수 (***일반 웹 배포 경로 사용***) ---
         function getNotesCollectionRef() {
             if (!userId) {
-                // userId가 없으면 컬렉션에 접근 불가 (인증 완료 대기)
                 throw new Error("User ID is required for private collection reference.");
             }
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            // 🚨 개인별 경로 사용: /artifacts/{appId}/users/{userId}/notes
-            return collection(db, `artifacts/${appId}/users/${userId}/notes`);
+            // 일반 웹 배포 시 경로: /users/{userId}/notes
+            return collection(db, `users/${userId}/notes`); 
         }
 
 
         // --- 3. Firebase 초기화 및 인증 ---
         async function initFirebase() {
             try {
-                // Canvas 환경 변수 로드
-                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-                if (Object.keys(firebaseConfig).length === 0) {
-                     authStatus.textContent = "오류: Firebase 설정이 필요합니다.";
+                // 🚩 제공된 FIREBASE_CONFIG를 사용하여 초기화
+                if (!FIREBASE_CONFIG.apiKey) {
+                     authStatus.textContent = "오류: Firebase 설정이 누락되었습니다.";
                      return;
                 }
                 
-                app = initializeApp(firebaseConfig);
+                app = initializeApp(FIREBASE_CONFIG);
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
@@ -202,24 +209,19 @@
                         saveNoteBtn.disabled = false;
                         loadNotesRealtime(); // 인증 후 실시간 로드 시작
                     } else {
-                        // 사용자 토큰이 있으면 사용하고, 없으면 익명 로그인 시도
-                        if (initialAuthToken) {
-                             await signInWithCustomToken(auth, initialAuthToken);
-                        } else {
-                             await signInAnonymously(auth);
-                        }
+                        // 익명 로그인 시도 (GitHub Pages 배포 환경의 기본 인증 방식)
+                        await signInAnonymously(auth);
                     }
                 });
 
             } catch (error) {
                 console.error("Firebase 초기화/인증 오류:", error);
-                authStatus.textContent = "오류: Firebase 연결에 실패했습니다.";
+                authStatus.textContent = "오류: Firebase 연결에 실패했습니다. 콘솔을 확인하세요.";
                 showToast("Firebase 연결 실패. 콘솔을 확인하세요.", 'bg-red-700');
             }
         }
 
         // --- 4. 메모 저장 (Create) ---
-        // window에 할당하여 HTML의 onclick에서 접근할 수 있도록 수정
         window.saveNote = async function() {
             if (!isAuthReady || !userId) {
                 showToast("사용자 인증 대기 중이거나 로그인되지 않았습니다.", 'bg-yellow-500');
@@ -233,39 +235,33 @@
             }
             
             try {
-                // Firestore에 저장할 데이터
                 const newNote = { 
                     content: text, 
-                    date: new Date().toISOString(), // 정렬용 ISO String
-                    creatorId: userId // 누가 만들었는지 기록 (보안 규칙 검증용)
+                    date: new Date().toISOString(), 
+                    creatorId: userId 
                 };
                 
-                // 🚨 getNotesCollectionRef()는 개인 경로를 반환합니다.
                 await addDoc(getNotesCollectionRef(), newNote);
                 
                 noteInput.value = ""; 
                 showToast("메모가 성공적으로 저장되었습니다.");
-                // 새 메모가 추가되면 첫 페이지로 이동하여 즉시 보이게 함
                 currentPage = 1;
             } catch (error) {
-                // 보안 규칙 위반 시 여기에 오류가 표시됩니다.
                 console.error("메모 저장 오류:", error);
-                showToast("메모 저장에 실패했습니다. (권한 오류 가능성)", 'bg-red-500');
+                showToast("메모 저장에 실패했습니다. (보안 규칙 또는 네트워크 오류)", 'bg-red-500');
             }
         }
 
         // --- 5. 메모 수정 (Update) ---
-        // window에 할당하여 버튼에서 접근할 수 있도록 수정
         window.updateNote = async function(noteId, newText) {
             if (!isAuthReady || !userId) return;
 
             try {
-                // 🚨 개인 경로에서 해당 메모 문서 참조
                 const noteRef = doc(getNotesCollectionRef(), noteId);
                 
                 await updateDoc(noteRef, {
                     content: newText,
-                    date: new Date().toISOString() // 수정 시간 업데이트
+                    date: new Date().toISOString()
                 });
                 
                 showToast("메모가 수정되었습니다.");
@@ -277,12 +273,10 @@
         }
 
         // --- 6. 메모 삭제 (Delete) ---
-        // window에 할당하여 버튼에서 접근할 수 있도록 수정
         window.deleteNote = async function(noteId) {
             if (!isAuthReady || !userId) return;
 
             try {
-                // 🚨 개인 경로에서 해당 메모 문서 참조
                 const noteRef = doc(getNotesCollectionRef(), noteId);
                 await deleteDoc(noteRef);
                 
@@ -295,18 +289,14 @@
 
         // --- 7. 메모 실시간 불러오기 (Read - Realtime Snapshot) ---
         function loadNotesRealtime() {
-            // 인증이 완료되고 userId가 확보된 후에만 실행
             if (!db || !isAuthReady || !userId) return;
 
-            // 🚨 getNotesCollectionRef()는 개인 경로를 반환합니다.
             onSnapshot(getNotesCollectionRef(), (querySnapshot) => {
                 const fetchedNotes = [];
                 querySnapshot.forEach((doc) => {
-                    // ID가 아닌, Firestore에 저장된 문서 ID를 사용합니다.
                     fetchedNotes.push({ id: doc.id, ...doc.data() });
                 });
 
-                // 클라이언트 측 정렬 (Date 기준 내림차순)
                 allNotes = fetchedNotes.sort((a, b) => {
                     const dateA = new Date(a.date);
                     const dateB = new Date(b.date);
@@ -323,7 +313,6 @@
                     window.renderPagination();
                 }
             }, (error) => {
-                // 보안 규칙을 위반하면 이 오류가 발생합니다.
                 console.error("Firestore 실시간 리스너 오류:", error);
                 showToast("메모 목록 불러오기에 실패했습니다. (보안 규칙 확인)", 'bg-red-500');
             });
@@ -331,13 +320,11 @@
         
         // --- 8. UI 렌더링 및 페이지네이션 ---
 
-        // 🚩 window에 할당하여 전역 접근 가능하게 함
         window.renderNotes = function() {
             noteList.innerHTML = "";
             const totalNotes = allNotes.length;
             const totalPages = Math.ceil(totalNotes / NOTES_PER_PAGE);
             
-            // 페이지 인덱스 보정
             if (currentPage > totalPages) currentPage = totalPages || 1;
             if (currentPage < 1) currentPage = 1;
 
@@ -356,7 +343,6 @@
                     day: '2-digit'
                 }).replace(/\s/g, '').replace(/\.$/, '');
                 
-                // URI 인코딩 사용: 메모 내용의 특수문자 오류 방지
                 const encodedContent = encodeURIComponent(note.content);
 
                 li.innerHTML = `
@@ -375,7 +361,6 @@
             window.renderPagination();
         }
 
-        // 🚩 window에 할당하여 전역 접근 가능하게 함
         window.renderPagination = function() {
             paginationControls.innerHTML = "";
             const totalPages = Math.ceil(allNotes.length / NOTES_PER_PAGE);
@@ -404,7 +389,6 @@
         function createPageButton(text, pageIndex, isEnabled, isActive = false) {
             const button = document.createElement('button');
             button.textContent = text;
-            // 🚩 isEnabled가 false일 때만 disabled 속성을 추가
             button.disabled = !isEnabled; 
 
             button.className = `px-3 py-1 rounded-lg text-sm font-medium transition ${
@@ -414,14 +398,9 @@
             } ${isEnabled ? '' : 'opacity-50 cursor-not-allowed'}`;
 
             if (isEnabled) {
-                // 🚩 .onclick 대신 addEventListener를 사용해 이벤트 연결 안정성 확보
                 button.addEventListener('click', () => {
-                    // 디버깅용 로그: 클릭 이벤트 확인
-                    console.log(`페이지 버튼 클릭: ${pageIndex} (현재 페이지: ${currentPage})`);
-                    
                     currentPage = pageIndex;
                     window.scrollTo({ top: 0, behavior: 'smooth' });
-                    // 전역 함수 호출
                     window.renderNotes(); 
                     window.renderPagination();
                 });
@@ -431,16 +410,13 @@
 
         // --- 9. 커스텀 UI/메시지 함수 ---
         window.openEditModal = function(id, encodedContent) {
-            // URI 디코딩 적용
             const content = decodeURIComponent(encodedContent);
             
             editTextarea.value = content;
             editModal.style.display = 'flex';
             
-            // 기존 버튼에 onclick 핸들러를 직접 덮어쓰기
             saveEditBtn.onclick = function() {
                 const newText = editTextarea.value.trim();
-                // window.updateNote를 직접 호출
                 if (newText && newText !== content.trim()) {
                     window.updateNote(id, newText);
                 } else {
