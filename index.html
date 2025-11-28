@@ -4,15 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Firestore 메모장</title>
-    <!-- Tailwind CSS 로딩 -->
+
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700&display=swap');
-        body {
-            font-family: 'Pretendard', sans-serif;
-            background-color: #f3f4f6;
-            min-height: 100vh;
-        }
+        body { font-family: 'Pretendard', sans-serif; background-color: #f3f4f6; min-height: 100vh; }
+
         #noteList {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); 
@@ -21,6 +20,7 @@
             list-style: none;
             margin: 0 auto; 
         }
+
         .note-card {
             border: 1px solid #e5e7eb;
             background-color: white;
@@ -33,617 +33,234 @@
             min-height: 150px;
             transition: transform 0.2s;
         }
-        .note-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.1);
-        }
-        .note-content {
-            white-space: pre-wrap; 
-            word-break: break-word; 
-            flex-grow: 1;
-            margin-top: 8px;
-            line-height: 1.5;
-            color: #4b5563;
-        }
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.6);
-            display: none; 
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
-        }
-        .modal-content {
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-            animation: fadeIn 0.3s ease-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        .spinner {
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            width: 1.25rem;
-            height: 1.25rem;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
+        .note-card:hover { transform: translateY(-2px); box-shadow: 0 6px 10px rgba(0,0,0,0.1); }
+
+        .note-content { white-space: pre-wrap; word-break: break-word; flex-grow: 1; margin-top: 8px; line-height: 1.5; color: #4b5563; }
+
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: white; padding: 24px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+
+        .spinner { border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; width: 1.25rem; height: 1.25rem; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg);} }
     </style>
 </head>
+
 <body class="p-4 md:p-8">
 
-    <div class="max-w-4xl mx-auto">
-        <h1 class="text-4xl font-bold text-gray-800 mb-8 text-center">🔐 Firestore 메모장</h1>
-        
-        <!-- 인증/로그인 영역 -->
-        <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 p-4 bg-white rounded-xl shadow-md border border-gray-100">
-            <div id="auth-info-box">
-                <p id="auth-status" class="font-semibold text-indigo-700">인증 및 데이터베이스 연결 중...</p>
-                <p id="user-display" class="text-sm text-gray-600 mt-1 hidden"></p>
-                <p id="auth-warning" class="text-xs text-red-600 mt-1 font-medium hidden">
-                    ⚠️ 현재 익명 사용자입니다. **Google 로그인** 시 메모가 영구 저장됩니다.
-                </p>
-            </div>
+<div class="max-w-4xl mx-auto">
+    <h1 class="text-4xl font-bold text-gray-800 mb-8 text-center">🔐 Firestore 메모장 (Google 로그인 전용)</h1>
 
-            <div id="auth-buttons" class="flex gap-3">
-                <button onclick="signInWithGoogle()" id="google-sign-in-btn"
-                        class="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition duration-150 ease-in-out hidden">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/4/4a/Logo-google-G-icon.png" class="inline w-4 h-4 mr-2" alt="Google">
-                    Google 로그인
-                </button>
-                <button onclick="signOutUser()" id="sign-out-btn"
-                        class="px-4 py-2 text-sm font-semibold bg-gray-500 text-white rounded-lg shadow-md hover:bg-gray-600 transition duration-150 ease-in-out hidden">
-                    로그아웃
-                </button>
-            </div>
+    <!-- 🔵 인증 상태 박스 -->
+    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6 p-4 bg-white rounded-xl shadow-md">
+        <div>
+            <p id="auth-status" class="font-semibold text-indigo-700">Google 로그인 필요합니다.</p>
+            <p id="user-display" class="text-sm text-gray-600 mt-1 hidden"></p>
+        </div>
+    </div>
+
+    <!-- 🟢 메모 입력 박스 -->
+    <div class="flex flex-col gap-4 mb-10 p-6 bg-white rounded-xl shadow-lg">
+        
+        <!-- Google 로그인 버튼: 오른쪽 정렬 -->
+        <div class="flex justify-end">
+            <button onclick="signInWithGoogle()" id="google-sign-in-btn"
+                class="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg shadow-md hover:bg-blue-700 transition">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/4/4a/Logo-google-G-icon.png"
+                    class="inline w-4 h-4 mr-2"> Google 로그인
+            </button>
+
+            <button onclick="signOutUser()" id="sign-out-btn"
+                class="ml-3 px-4 py-2 text-sm font-semibold bg-gray-500 text-white rounded-lg shadow-md hover:bg-gray-600 transition hidden">
+                로그아웃
+            </button>
         </div>
 
-        <!-- 메모 작성 영역 -->
-        <div class="flex flex-col md:flex-row gap-4 mb-10 p-6 bg-white rounded-xl shadow-lg border border-gray-100">
-            <!-- 입력 텍스트 영역 -->
-            <textarea id="note-input" rows="5" placeholder="나만의 메모를 입력하세요..." 
-                      class="flex-grow p-4 text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out resize-none"></textarea>
-            
-            <!-- 입력 버튼 -->
+        <!-- 입력 영역 -->
+        <div class="flex flex-col md:flex-row gap-4">
+            <textarea id="note-input" rows="5" placeholder="로그인 후 메모를 입력하세요..."
+                class="flex-grow p-4 text-base border border-gray-300 rounded-lg resize-none" disabled></textarea>
+
             <div class="flex md:flex-col items-stretch">
                 <button onclick="saveNote()" id="save-note-btn"
-                        class="w-full md:w-auto px-6 py-3 text-white font-semibold bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-md transition duration-150 ease-in-out flex items-center justify-center whitespace-nowrap disabled:opacity-50" disabled>
-                    <span id="button-content" class="flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" />
-                        </svg>
-                        입력
-                    </span>
-                    <span id="button-loading" class="hidden">
-                        <div class="spinner"></div>
-                    </span>
+                    class="w-full md:w-auto px-6 py-3 text-white font-semibold bg-indigo-600 rounded-lg shadow-md disabled:opacity-50"
+                    disabled>
+                    <span id="button-content" class="flex items-center">입력</span>
+                    <span id="button-loading" class="hidden"><div class="spinner"></div></span>
                 </button>
             </div>
         </div>
-        
-        <!-- 메모 리스트 제목 -->
-        <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">나만의 메모 목록</h2>
-        
-        <!-- 메모 리스트 (가운데 정렬) -->
-        <div class="w-full">
-            <ul id="noteList" class="mx-auto">
-                <!-- 메모 카드가 여기에 렌더링됩니다 -->
-            </ul>
-        </div>
-        
-        <!-- 페이지 네이션 영역 -->
-        <div id="pagination-controls" class="flex justify-center items-center gap-2 mt-6">
-            <!-- 페이지 버튼이 여기에 렌더링됩니다 -->
-        </div>
-        <p id="no-notes-message" class="text-center text-gray-500 mt-10 hidden">저장된 메모가 없습니다. 위에 메모를 작성하거나 Google 로그인을 시도해주세요.</p>
     </div>
 
-    <!-- 커스텀 수정 모달 -->
-    <div id="edit-modal" class="modal">
-        <div class="modal-content">
-            <h3 class="text-xl font-bold mb-4">메모 수정</h3>
-            <textarea id="edit-text" rows="8" class="w-full p-3 border border-gray-300 rounded-lg mb-4 focus:ring-indigo-500 focus:border-indigo-500 resize-none"></textarea>
-            <div class="flex justify-end gap-3">
-                <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg hover:bg-gray-400 transition">취소</button>
-                <button id="save-edit-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition">수정 완료</button>
-            </div>
+    <h2 class="text-2xl font-semibold text-gray-700 mb-4 border-b pb-2">나의 메모</h2>
+
+    <ul id="noteList"></ul>
+</div>
+
+<!-- 수정 모달 -->
+<div id="edit-modal" class="modal">
+    <div class="modal-content">
+        <h3 class="text-xl font-bold mb-4">메모 수정</h3>
+        <textarea id="edit-text" rows="8" class="w-full p-3 border rounded-lg"></textarea>
+
+        <div class="flex justify-end gap-3 mt-4">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded-lg">취소</button>
+            <button id="save-edit-btn" class="px-4 py-2 bg-indigo-600 text-white rounded-lg">수정 완료</button>
         </div>
     </div>
+</div>
 
 
-    <script type="module">
-        // --- Firebase UMD Imports ---
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+<!-- ──────────────────────── Firebase 스크립트 ──────────────────────── -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } 
+        from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // setLogLevel('debug'); // 개발 중 Firestore 로그 확인용
+    import { getFirestore, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot }
+        from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 🚨🚨🚨 [중요] 사용자가 제공한 실제 Firebase 설정 값을 직접 입력했습니다. 🚨🚨🚨
-        const FIREBASE_CONFIG = {
-            apiKey: "AIzaSyBq4P9oCU6pzJFRv_xxJyvG9moYjlHTeys",           
-            authDomain: "memo-f8ef8.firebaseapp.com",  
-            projectId: "memo-f8ef8",     
-            storageBucket: "memo-f8ef8.firebasestorage.app",
-            messagingSenderId: "92169207764",
-            appId: "1:92169207764:web:b2b078dcfe8d38dcf62041",
-            measurementId: "G-X6GT0JDL7S" 
-        };
+    /* Firebase 설정 */
+    const FIREBASE_CONFIG = {
+        apiKey: "AIzaSyBq4P9oCU6pzJFRv_xxJyvG9moYjlHTeys",
+        authDomain: "memo-f8ef8.firebaseapp.com",
+        projectId: "memo-f8ef8",
+        storageBucket: "memo-f8ef8.firebasestorage.app",
+        messagingSenderId: "92169207764",
+        appId: "1:92169207764:web:b2b078dcfe8d38dcf62041",
+    };
 
-        // --- 1. 전역 상수 및 변수 설정 ---
-        const NOTES_PER_PAGE = 20; 
+    const app = initializeApp(FIREBASE_CONFIG);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-        let app;
-        let db;
-        let auth;
-        let userId = null;
-        let isAuthReady = false; 
-        let unsubscribeNotes = null; // onSnapshot 리스너를 위한 변수
-        
-        let allNotes = []; 
-        let currentPage = 1; 
+    /* 전역 변수 */
+    let userId = null;
+    let unsubscribe = null;
 
-        // DOM 요소 캐싱
-        const noteInput = document.getElementById("note-input");
-        const noteList = document.getElementById("noteList");
-        const paginationControls = document.getElementById("pagination-controls");
-        const noNotesMessage = document.getElementById('no-notes-message');
-        const editModal = document.getElementById('edit-modal');
-        const editTextarea = document.getElementById('edit-text');
-        const saveEditBtn = document.getElementById('save-edit-btn');
-        const saveNoteBtn = document.getElementById('save-note-btn');
-        const authStatus = document.getElementById('auth-status');
-        const buttonContent = document.getElementById('button-content');
-        const buttonLoading = document.getElementById('button-loading');
-        const userDisplay = document.getElementById('user-display');
-        const authWarning = document.getElementById('auth-warning');
-        const googleSignInBtn = document.getElementById('google-sign-in-btn');
-        const signOutBtn = document.getElementById('sign-out-btn');
+    const googleBtn = document.getElementById("google-sign-in-btn");
+    const logoutBtn = document.getElementById("sign-out-btn");
+    const authStatus = document.getElementById("auth-status");
+    const userDisplay = document.getElementById("user-display");
+    const noteInput = document.getElementById("note-input");
+    const saveBtn = document.getElementById("save-note-btn");
+    const noteList = document.getElementById("noteList");
 
-
-        // --- 2. Firestore 컬렉션 참조 함수 ---
-        function getNotesCollectionRef() {
-            if (!userId) {
-                // 이 경우 loadNotesRealtime에서 이미 처리되므로 에러 대신 null 반환
-                return null; 
-            }
-            // Private Data Path: /users/{userId}/notes
-            return collection(db, `users/${userId}/notes`); 
+    /* Google 로그인 */
+    window.signInWithGoogle = async function () {
+        const provider = new GoogleAuthProvider();
+        try {
+            await signInWithPopup(auth, provider);
+        } catch (err) {
+            alert("Google 로그인 실패");
         }
+    };
 
-        // --- 버튼 상태 관리 함수 ---
-        function setButtonState(isLoading) {
-            // 로딩 중이 아닐 때만 버튼을 활성화 (isAuthReady가 true일 때)
-            const shouldBeEnabled = !isLoading && isAuthReady && userId;
-            saveNoteBtn.disabled = !shouldBeEnabled;
+    /* 로그아웃 */
+    window.signOutUser = async function () {
+        await signOut(auth);
+    };
 
-            if (isLoading) {
-                buttonContent.classList.add('hidden');
-                buttonLoading.classList.remove('hidden');
-            } else {
-                buttonContent.classList.remove('hidden');
-                buttonLoading.classList.add('hidden');
-            }
-        }
+    /* 인증 상태 감시 */
+    onAuthStateChanged(auth, async (user) => {
+        if (unsubscribe) unsubscribe();
 
-        // --- 3. Firebase 인증 및 UI 업데이트 ---
-        function updateAuthUI(user) {
-            // UI 초기화
-            googleSignInBtn.classList.add('hidden');
-            signOutBtn.classList.add('hidden');
-            userDisplay.classList.add('hidden');
-            authWarning.classList.add('hidden');
-            
-            authStatus.closest('div').classList.remove('bg-indigo-100', 'border-indigo-200', 'bg-green-100', 'border-green-200', 'bg-red-100', 'border-red-200');
-            authStatus.closest('div').classList.add('bg-indigo-100', 'border-indigo-200'); // 기본 색상으로 복구
-            authStatus.classList.remove('text-green-700', 'text-red-700');
-            authStatus.classList.add('text-indigo-700');
+        if (!user) {
+            userId = null;
 
+            authStatus.textContent = "Google 로그인 필요합니다.";
+            googleBtn.classList.remove("hidden");
+            logoutBtn.classList.add("hidden");
+            userDisplay.classList.add("hidden");
 
-            if (user) {
-                userId = user.uid;
-                setButtonState(false); // 메모 저장 버튼 활성화
-                
-                authStatus.closest('div').classList.remove('bg-indigo-100', 'border-indigo-200');
-                authStatus.closest('div').classList.add('bg-green-100', 'border-green-200');
-                authStatus.classList.remove('text-indigo-700');
-                authStatus.classList.add('text-green-700');
-
-                if (user.isAnonymous) {
-                    // 익명 사용자 상태
-                    authStatus.textContent = `✅ 연결 완료 - 익명 모드`;
-                    userDisplay.textContent = `(임시 User ID: ${userId})`;
-                    authWarning.classList.remove('hidden');
-                    googleSignInBtn.classList.remove('hidden'); // Google 로그인 버튼 표시
-                    signOutBtn.classList.remove('hidden'); // 익명 사용자도 로그아웃 가능
-                } else {
-                    // 영구 로그인 사용자 상태 (예: Google)
-                    authStatus.textContent = `✅ 로그인 완료 - 영구 메모 모드`;
-                    userDisplay.textContent = `${user.displayName || user.email}님으로 로그인됨 (User ID: ${userId})`;
-                    signOutBtn.classList.remove('hidden'); // 로그아웃 버튼 표시
-                }
-                userDisplay.classList.remove('hidden');
-
-                loadNotesRealtime(); // 메모 로드 시작
-            } else {
-                // 로그아웃 또는 인증 실패 상태
-                userId = null;
-                setButtonState(true); // 메모 저장 버튼 비활성화
-                
-                authStatus.textContent = "로그아웃 상태. Google 로그인으로 영구 메모를 시작하세요.";
-                googleSignInBtn.classList.remove('hidden');
-                
-                // 메모 목록 초기화
-                allNotes = [];
-                window.renderNotes();
-                noNotesMessage.classList.remove('hidden');
-            }
-        }
-
-
-        // --- 4. Firebase 초기화 및 인증 리스너 설정 ---
-        async function initFirebase() {
-            setButtonState(true); 
-            authStatus.textContent = "인증 및 데이터베이스 연결 중...";
-            
-            try {
-                if (!FIREBASE_CONFIG.apiKey) {
-                     authStatus.textContent = "오류: Firebase 설정이 누락되었습니다.";
-                     return;
-                }
-                
-                app = initializeApp(FIREBASE_CONFIG);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                // 세션 유지를 위해 persistence 설정 (브라우저를 닫아도 로그인 유지)
-                await setPersistence(auth, browserSessionPersistence);
-
-                onAuthStateChanged(auth, async (user) => {
-                    if (!isAuthReady) {
-                        isAuthReady = true;
-                    }
-                    
-                    // 기존 구독 해제 (새 유저가 로그인하면 이전 유저의 데이터를 보지 않도록)
-                    if (unsubscribeNotes) {
-                        unsubscribeNotes();
-                        unsubscribeNotes = null;
-                    }
-
-                    if (user) {
-                        // 로그인된 사용자 (Google 또는 익명)가 있음
-                        updateAuthUI(user);
-                    } else {
-                        // 사용자 없음 -> 익명 로그인 시도 (영구 로그인이 아니므로)
-                        try {
-                            await signInAnonymously(auth);
-                        } catch(anonError) {
-                            console.error("익명 로그인 실패:", anonError);
-                            authStatus.textContent = "❌ 인증 실패 - Firebase '익명 인증' 또는 'Google 인증' 활성화 여부를 확인하세요.";
-                            authStatus.closest('div').classList.remove('bg-indigo-100', 'border-indigo-200', 'bg-green-100', 'border-green-200');
-                            authStatus.closest('div').classList.add('bg-red-100', 'border-red-200');
-                            authStatus.classList.remove('text-indigo-700');
-                            authStatus.classList.add('text-red-700');
-                            setButtonState(true);
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error("Firebase 초기화/인증 오류:", error);
-                showToast("Firebase 연결 실패. 콘솔을 확인하세요.", 'bg-red-700');
-            }
-        }
-
-        // --- 5. Google 로그인 ---
-        window.signInWithGoogle = async function() {
-            const provider = new GoogleAuthProvider();
-            try {
-                // 로그인 팝업 창을 띄웁니다.
-                await signInWithPopup(auth, provider);
-                // onAuthStateChanged 리스너가 성공적으로 로그인된 사용자를 처리할 것입니다.
-                showToast("Google 로그인 성공!");
-            } catch (error) {
-                console.error("Google 로그인 오류:", error);
-                showToast("Google 로그인에 실패했습니다.", 'bg-red-500');
-            }
-        }
-
-        // --- 6. 로그아웃 ---
-        window.signOutUser = async function() {
-            try {
-                // 로그아웃
-                await signOut(auth);
-                // onAuthStateChanged 리스너가 사용자 없음 상태를 처리하고 익명 로그인으로 전환하거나, 
-                // 전환이 실패하면 최종적으로 '로그아웃 상태' UI를 보여줄 것입니다.
-                showToast("로그아웃되었습니다.");
-            } catch (error) {
-                console.error("로그아웃 오류:", error);
-                showToast("로그아웃에 실패했습니다.", 'bg-red-500');
-            }
-        }
-        
-        // --- 7. 메모 저장 (Create) ---
-        window.saveNote = async function() {
-            if (!isAuthReady || !userId) {
-                showToast("로그인이 필요합니다. Google 로그인을 시도해주세요.", 'bg-yellow-600');
-                return;
-            }
-            // ... (나머지 saveNote 로직은 동일)
-            const text = noteInput.value.trim();
-            if (!text) {
-                showToast("메모 내용을 입력해주세요.", 'bg-red-500');
-                return;
-            }
-            
-            setButtonState(true);
-            
-            try {
-                const newNote = { 
-                    content: text, 
-                    date: new Date().toISOString(), 
-                    creatorId: userId 
-                };
-                
-                await addDoc(getNotesCollectionRef(), newNote);
-                
-                noteInput.value = ""; 
-                showToast("메모가 성공적으로 저장되었습니다.");
-                currentPage = 1; 
-            } catch (error) {
-                console.error("메모 저장 오류:", error);
-                showToast("메모 저장에 실패했습니다. (보안 규칙 문제일 수 있음)", 'bg-red-500');
-            } finally {
-                setButtonState(false);
-            }
-        }
-
-        // --- 8. 메모 수정 (Update) ---
-        window.updateNote = async function(noteId, newText) {
-            if (!isAuthReady || !userId) return;
-
-            try {
-                const noteRef = doc(getNotesCollectionRef(), noteId);
-                
-                await updateDoc(noteRef, {
-                    content: newText,
-                    date: new Date().toISOString()
-                });
-                
-                showToast("메모가 수정되었습니다.");
-                window.closeModal();
-            } catch (error) {
-                console.error("메모 수정 오류:", error);
-                showToast("메모 수정에 실패했습니다.", 'bg-red-500');
-            }
-        }
-
-        // --- 9. 메모 삭제 (Delete) ---
-        window.deleteNote = async function(noteId) {
-            if (!isAuthReady || !userId) return;
-
-            try {
-                const noteRef = doc(getNotesCollectionRef(), noteId);
-                await deleteDoc(noteRef);
-                
-                showToast("메모가 삭제되었습니다.");
-            } catch (error) {
-                console.error("메모 삭제 오류:", error);
-                showToast("메모 삭제에 실패했습니다.", 'bg-red-500');
-            }
-        }
-
-        // --- 10. 메모 실시간 불러오기 (Read - Realtime Snapshot) ---
-        function loadNotesRealtime() {
-            const ref = getNotesCollectionRef();
-            if (!ref) return; // userId가 없으면 리스너를 설정하지 않습니다.
-
-            // 기존 리스너가 있다면 해제합니다.
-            if (unsubscribeNotes) {
-                unsubscribeNotes();
-            }
-
-            // 새로운 리스너를 설정하고 unsubscribe 함수를 저장합니다.
-            unsubscribeNotes = onSnapshot(ref, (querySnapshot) => {
-                const fetchedNotes = [];
-                querySnapshot.forEach((doc) => {
-                    fetchedNotes.push({ id: doc.id, ...doc.data() });
-                });
-
-                allNotes = fetchedNotes.sort((a, b) => {
-                    const dateA = new Date(a.date);
-                    const dateB = new Date(b.date);
-                    return dateB - dateA;
-                });
-                
-                if (allNotes.length === 0) {
-                    noteList.innerHTML = '';
-                    noNotesMessage.classList.remove('hidden');
-                    paginationControls.innerHTML = '';
-                } else {
-                    noNotesMessage.classList.add('hidden');
-                    
-                    const totalPages = Math.ceil(allNotes.length / NOTES_PER_PAGE);
-                    if (currentPage > totalPages && totalPages > 0) {
-                        currentPage = totalPages;
-                    } else if (currentPage === 0 && totalPages > 0) {
-                        currentPage = 1;
-                    }
-                    
-                    window.renderNotes();
-                }
-            }, (error) => {
-                console.error("Firestore 실시간 리스너 오류:", error);
-                showToast("메모 목록 불러오기에 실패했습니다. (네트워크 또는 권한 문제)", 'bg-red-500');
-            });
-        }
-        
-        // --- 11. UI 렌더링 및 페이지네이션 ---
-
-        window.renderNotes = function() {
+            noteInput.disabled = true;
+            saveBtn.disabled = true;
             noteList.innerHTML = "";
-            const totalNotes = allNotes.length;
-            const totalPages = Math.ceil(totalNotes / NOTES_PER_PAGE);
-            
-            if (totalNotes === 0) {
-                 noNotesMessage.classList.remove('hidden');
-            } else {
-                 noNotesMessage.classList.add('hidden');
-            }
+            return;
+        }
 
-            if (currentPage > totalPages) currentPage = totalPages || 1;
-            if (currentPage < 1) currentPage = 1;
+        // 로그인됨
+        userId = user.uid;
 
-            const startIndex = (currentPage - 1) * NOTES_PER_PAGE;
-            const endIndex = Math.min(startIndex + NOTES_PER_PAGE, totalNotes);
-            const notesToShow = allNotes.slice(startIndex, endIndex);
+        googleBtn.classList.add("hidden");
+        logoutBtn.classList.remove("hidden");
 
-            notesToShow.forEach(note => {
+        userDisplay.textContent = `${user.displayName} (${user.email})`;
+        userDisplay.classList.remove("hidden");
+
+        noteInput.disabled = false;
+        saveBtn.disabled = false;
+
+        loadNotes();
+    });
+
+    /* 메모 저장 */
+    window.saveNote = async function () {
+        const text = noteInput.value.trim();
+        if (!text) return;
+
+        await addDoc(collection(db, `users/${userId}/notes`), {
+            content: text,
+            date: new Date().toISOString()
+        });
+
+        noteInput.value = "";
+    };
+
+    /* 메모 불러오기 */
+    function loadNotes() {
+        const ref = collection(db, `users/${userId}/notes`);
+
+        unsubscribe = onSnapshot(ref, (snapshot) => {
+            noteList.innerHTML = "";
+
+            snapshot.forEach((docItem) => {
+                const note = docItem.data();
+
                 const li = document.createElement("li");
-                li.className = 'note-card';
-
-                const dateObj = new Date(note.date);
-                const dateString = dateObj.toLocaleDateString('ko-KR', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit'
-                }).replace(/\s/g, '').replace(/\.$/, '');
-                
-                const encodedContent = encodeURIComponent(note.content);
+                li.className = "note-card";
 
                 li.innerHTML = `
-                    <div class="flex flex-col flex-grow">
-                        <p class="text-xs font-semibold text-indigo-500 mb-2">${dateString}</p>
-                        <p class="note-content">${note.content}</p>
-                    </div>
+                    <p class="note-content">${note.content}</p>
                     <div class="flex justify-end gap-2 mt-4">
-                        <button class="edit-btn px-3 py-1 text-sm text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition" 
-                                onclick="openEditModal('${note.id}', '${encodedContent}')">수정</button>
-                        <button class="delete-btn px-3 py-1 text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg hover:bg-red-100 transition" 
-                                onclick="deleteNote('${note.id}')">삭제</button>
+                        <button onclick="openEditModal('${docItem.id}', '${encodeURIComponent(note.content)}')"
+                            class="px-3 py-1 text-sm text-indigo-600 border border-indigo-200 bg-indigo-50 rounded-lg">수정</button>
+                        <button onclick="deleteNote('${docItem.id}')"
+                            class="px-3 py-1 text-sm text-red-600 border border-red-200 bg-red-50 rounded-lg">삭제</button>
                     </div>
                 `;
+
                 noteList.appendChild(li);
             });
+        });
+    }
 
-            window.renderPagination();
-        }
+    /* 메모 삭제 */
+    window.deleteNote = async function (id) {
+        await deleteDoc(doc(db, `users/${userId}/notes/${id}`));
+    };
 
-        window.renderPagination = function() {
-            paginationControls.innerHTML = "";
-            const totalPages = Math.ceil(allNotes.length / NOTES_PER_PAGE);
+    /* 수정 모달 */
+    window.openEditModal = function (id, encodedContent) {
+        document.getElementById("edit-modal").style.display = "flex";
+        const textarea = document.getElementById("edit-text");
 
-            if (totalPages <= 1) return;
+        const content = decodeURIComponent(encodedContent);
+        textarea.value = content;
 
-            // 이전 버튼
-            const prevBtn = createPageButton('이전', currentPage - 1, currentPage > 1);
-            paginationControls.appendChild(prevBtn);
+        document.getElementById("save-edit-btn").onclick = async () => {
+            await updateDoc(doc(db, `users/${userId}/notes/${id}`), {
+                content: textarea.value,
+                date: new Date().toISOString(),
+            });
 
-            let startPage = Math.max(1, currentPage - 3);
-            let endPage = Math.min(totalPages, currentPage + 3);
+            closeModal();
+        };
+    };
 
-            if (currentPage <= 4) endPage = Math.min(totalPages, 7);
-            if (currentPage > totalPages - 3) startPage = Math.max(1, totalPages - 6);
-            if (endPage - startPage < 6 && totalPages > 6) {
-                if (startPage === 1) endPage = Math.min(totalPages, 7);
-                else if (endPage === totalPages) startPage = Math.max(1, totalPages - 6);
-            }
+    window.closeModal = function () {
+        document.getElementById("edit-modal").style.display = "none";
+    };
+</script>
 
-
-            for (let i = startPage; i <= endPage; i++) {
-                const pageBtn = createPageButton(i, i, true, i === currentPage);
-                paginationControls.appendChild(pageBtn);
-            }
-
-            // 다음 버튼
-            const nextBtn = createPageButton('다음', currentPage + 1, currentPage < totalPages);
-            paginationControls.appendChild(nextBtn);
-        }
-        
-        function createPageButton(text, pageIndex, isEnabled, isActive = false) {
-            const button = document.createElement('button');
-            button.textContent = text;
-            button.disabled = !isEnabled; 
-
-            button.className = `px-3 py-1 rounded-lg text-sm font-medium transition ${
-                isActive 
-                    ? 'bg-indigo-600 text-white shadow-md' 
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-indigo-50 hover:text-indigo-600'
-            } ${isEnabled ? '' : 'opacity-50 cursor-not-allowed'}`;
-
-            if (isEnabled) {
-                button.addEventListener('click', (e) => {
-                    e.preventDefault(); 
-                    currentPage = pageIndex;
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                    window.renderNotes(); 
-                });
-            }
-            return button;
-        }
-
-
-        // --- 12. 커스텀 UI/메시지 함수 ---
-        window.openEditModal = function(id, encodedContent) {
-            const content = decodeURIComponent(encodedContent);
-            
-            editTextarea.value = content;
-            editModal.style.display = 'flex';
-            
-            saveEditBtn.onclick = function() {
-                const newText = editTextarea.value.trim();
-                if (newText && newText !== content.trim()) {
-                    saveEditBtn.disabled = true;
-                    saveEditBtn.textContent = '저장 중...';
-                    window.updateNote(id, newText).finally(() => {
-                        saveEditBtn.disabled = false;
-                        saveEditBtn.textContent = '수정 완료';
-                    });
-                } else {
-                    window.closeModal();
-                }
-            };
-            
-            editTextarea.focus(); 
-        }
-
-        window.closeModal = function() {
-            editModal.style.display = 'none';
-        }
-
-        function showToast(message, bgColor = 'bg-indigo-500') {
-            let toast = document.getElementById('custom-toast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'custom-toast';
-                document.body.appendChild(toast);
-            }
-            
-            toast.className = `fixed bottom-5 left-1/2 transform -translate-x-1/2 p-3 rounded-lg text-white shadow-xl transition-opacity duration-300 z-50 ${bgColor}`;
-            toast.textContent = message;
-            toast.style.opacity = '1';
-            
-            setTimeout(() => {
-                toast.style.opacity = '0';
-            }, 3000);
-        }
-
-        // --- 13. 초기화 ---
-        initFirebase();
-
-    </script>
 </body>
 </html>
