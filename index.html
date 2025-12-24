@@ -120,8 +120,12 @@ onAuthStateChanged(auth, user => {
         userId = user.uid;
         document.getElementById("auth-status").textContent = "";
         document.getElementById("user-display").textContent = user.email;
+        const loginBtn = document.getElementById("login-btn");
+        const logoutBtn = document.getElementById("logout-btn");
+        
         login-btn.classList.add("hidden");
         logout-btn.classList.remove("hidden");
+        
         noteInput.disabled = false;
         save-btn.disabled = false;
         loadNotes();
