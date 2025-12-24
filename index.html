@@ -16,8 +16,11 @@ body {
     background-color: #f3f4f6;
 }
 
+/* Markdown + 줄바꿈 유지 핵심 */
 .note-content {
-    white-space: normal;
+    white-space: pre-wrap;      /* 줄바꿈/공백 유지 */
+    word-break: break-word;
+    color: #111827;
 }
 
 .note-content img {
@@ -37,7 +40,9 @@ body {
     align-items: center;
     z-index: 100;
 }
-.modal.active { display: flex; }
+.modal.active {
+    display: flex;
+}
 </style>
 </head>
 
@@ -47,20 +52,41 @@ body {
 <h1 class="text-3xl font-bold text-center mb-6">📝 Firestore 메모장</h1>
 
 <!-- 로그인 상태 -->
-<div class="bg-white p-4 rounded shadow mb-6 flex justify-between">
-    <span id="auth-status">Google 로그인 필요</span>
-    <span id="user-display" class="text-sm text-gray-500"></span>
+<div class="bg-white p-4 rounded shadow mb-6 flex justify-between items-center">
+    <span id="auth-status" class="font-semibold text-indigo-700">
+        Google 로그인 필요합니다.
+    </span>
+    <span id="user-display" class="text-sm text-gray-600"></span>
 </div>
 
-<!-- 로그인 버튼 -->
+<!-- 로그인 / 로그아웃 -->
 <div class="flex justify-end mb-3">
-    <button id="login-btn" onclick="signInWithGoogle()" class="px-4 py-2 bg-blue-600 text-white rounded">Google 로그인</button>
-    <button id="logout-btn" onclick="signOutUser()" class="px-4 py-2 bg-gray-500 text-white rounded hidden ml-2">로그아웃</button>
+    <button id="google-login-btn"
+            onclick="signInWithGoogle()"
+            class="px-4 py-2 bg-blue-600 text-white rounded">
+        Google 로그인
+    </button>
+
+    <button id="logout-btn"
+            onclick="signOutUser()"
+            class="ml-3 px-4 py-2 bg-gray-500 text-white rounded hidden">
+        로그아웃
+    </button>
 </div>
 
 <!-- 메모 작성 -->
-<textarea id="note-input" rows="5" class="w-full p-4 border rounded mb-3" placeholder="Markdown 지원 메모..." disabled></textarea>
-<button id="save-btn" onclick="saveNote()" class="w-full bg-indigo-600 text-white py-2 rounded disabled:opacity-50" disabled>저장</button>
+<textarea id="note-input"
+          rows="5"
+          class="w-full p-4 border rounded mb-3"
+          placeholder="Markdown 지원 (줄바꿈/공백 그대로 표시됩니다)"
+          disabled></textarea>
+
+<button id="save-note-btn"
+        onclick="saveNote()"
+        class="w-full bg-indigo-600 text-white py-2 rounded disabled:opacity-50"
+        disabled>
+    저장
+</button>
 
 <ul id="noteList" class="mt-8 space-y-6"></ul>
 
@@ -71,11 +97,17 @@ body {
     <div class="bg-white p-6 rounded-xl w-full max-w-xl">
         <h2 class="text-xl font-bold mb-3">메모 수정</h2>
 
-        <textarea id="edit-input" rows="6" class="w-full p-3 border rounded"></textarea>
+        <textarea id="edit-input"
+                  rows="6"
+                  class="w-full p-3 border rounded"></textarea>
 
         <div class="flex justify-end gap-2 mt-4">
-            <button onclick="closeEditModal()" class="px-4 py-2 bg-gray-400 text-white rounded">취소</button>
-            <button onclick="saveEdit()" class="px-4 py-2 bg-indigo-600 text-white rounded">저장</button>
+            <button onclick="closeEditModal()" class="px-4 py-2 bg-gray-400 text-white rounded">
+                취소
+            </button>
+            <button onclick="saveEdit()" class="px-4 py-2 bg-indigo-600 text-white rounded">
+                저장
+            </button>
         </div>
     </div>
 </div>
@@ -86,6 +118,12 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChang
 import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
+/* 🔑 Markdown 옵션: 줄바꿈 유지 */
+marked.setOptions({
+    breaks: true
+});
+
+/* Firebase 설정 */
 const firebaseConfig = {
     apiKey: "AIzaSyBq4P9oCU6pzJFRv_xxJyvG9moYjlHTeys",
     authDomain: "memo-f8ef8.firebaseapp.com",
@@ -100,48 +138,62 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
+/* DOM */
+const googleLoginBtn = document.getElementById("google-login-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const authStatus = document.getElementById("auth-status");
+const userDisplay = document.getElementById("user-display");
+const noteInput = document.getElementById("note-input");
+const saveNoteBtn = document.getElementById("save-note-btn");
+const noteList = document.getElementById("noteList");
+const editModal = document.getElementById("editModal");
+const editInput = document.getElementById("edit-input");
+
+/* 상태 */
 let userId = null;
 let allNotes = [];
 let editingId = null;
 
-const noteInput = document.getElementById("note-input");
-const editInput = document.getElementById("edit-input");
-
 /* 로그인 */
-window.signInWithGoogle = async () => {
+window.signInWithGoogle = async function () {
     await signInWithPopup(auth, new GoogleAuthProvider());
 };
-window.signOutUser = async () => {
+
+window.signOutUser = async function () {
     await signOut(auth);
 };
 
+/* 인증 감지 */
 onAuthStateChanged(auth, user => {
     if (user) {
         userId = user.uid;
-        document.getElementById("auth-status").textContent = "";
-        document.getElementById("user-display").textContent = user.email;
-        const loginBtn = document.getElementById("login-btn");
-        const logoutBtn = document.getElementById("logout-btn");
-        
-        login-btn.classList.add("hidden");
-        logout-btn.classList.remove("hidden");
-        
+        authStatus.textContent = "";
+        userDisplay.textContent = user.email;
+        googleLoginBtn.classList.add("hidden");
+        logoutBtn.classList.remove("hidden");
         noteInput.disabled = false;
-        save-btn.disabled = false;
+        saveNoteBtn.disabled = false;
         loadNotes();
     } else {
         userId = null;
         allNotes = [];
+        authStatus.textContent = "Google 로그인 필요합니다.";
+        userDisplay.textContent = "";
+        googleLoginBtn.classList.remove("hidden");
+        logoutBtn.classList.add("hidden");
+        noteInput.disabled = true;
+        saveNoteBtn.disabled = true;
         renderNotes();
     }
 });
 
+/* Firestore */
 function notesRef() {
     return collection(db, `users/${userId}/notes`);
 }
 
 /* 저장 */
-window.saveNote = async () => {
+window.saveNote = async function () {
     if (!noteInput.value.trim()) return;
     await addDoc(notesRef(), {
         content: noteInput.value,
@@ -151,7 +203,7 @@ window.saveNote = async () => {
     loadNotes();
 };
 
-/* 불러오기 */
+/* 로드 */
 async function loadNotes() {
     const snap = await getDocs(notesRef());
     allNotes = snap.docs.map(d => ({ id: d.id, ...d.data() }))
@@ -161,43 +213,46 @@ async function loadNotes() {
 
 /* 렌더 */
 function renderNotes() {
-    const list = document.getElementById("noteList");
-    list.innerHTML = "";
-    allNotes.forEach(n => {
+    noteList.innerHTML = "";
+    allNotes.forEach(note => {
         const li = document.createElement("li");
         li.className = "bg-white p-4 rounded shadow";
         li.innerHTML = `
-            <div class="text-xs text-gray-500 mb-2">${new Date(n.date).toLocaleString()}</div>
-            <div class="note-content mb-3">${marked.parse(n.content)}</div>
+            <div class="text-xs text-gray-500 mb-2">
+                ${new Date(note.date).toLocaleString()}
+            </div>
+            <div class="note-content prose max-w-none mb-3">
+                ${marked.parse(note.content)}
+            </div>
             <div class="flex gap-2">
-                <button class="bg-indigo-100 px-3 py-1 rounded" onclick="openEdit('${n.id}')">수정</button>
-                <button class="bg-red-100 px-3 py-1 rounded" onclick="deleteNote('${n.id}')">삭제</button>
+                <button onclick="openEdit('${note.id}')" class="px-3 py-1 bg-indigo-100 rounded">수정</button>
+                <button onclick="deleteNote('${note.id}')" class="px-3 py-1 bg-red-100 rounded">삭제</button>
             </div>
         `;
-        list.appendChild(li);
+        noteList.appendChild(li);
     });
 }
 
 /* 삭제 */
-window.deleteNote = async id => {
-    if (!confirm("삭제할까요?")) return;
+window.deleteNote = async function (id) {
+    if (!confirm("삭제하시겠습니까?")) return;
     await deleteDoc(doc(db, `users/${userId}/notes/${id}`));
     loadNotes();
 };
 
-/* 수정 모달 */
-window.openEdit = id => {
+/* 수정 */
+window.openEdit = function (id) {
     const note = allNotes.find(n => n.id === id);
     editingId = id;
     editInput.value = note.content;
-    document.getElementById("editModal").classList.add("active");
-};
-window.closeEditModal = () => {
-    document.getElementById("editModal").classList.remove("active");
+    editModal.classList.add("active");
 };
 
-/* 수정 저장 */
-window.saveEdit = async () => {
+window.closeEditModal = function () {
+    editModal.classList.remove("active");
+};
+
+window.saveEdit = async function () {
     await updateDoc(doc(db, `users/${userId}/notes/${editingId}`), {
         content: editInput.value,
         date: new Date().toISOString()
@@ -206,14 +261,14 @@ window.saveEdit = async () => {
     loadNotes();
 };
 
-/* 이미지 붙여넣기 (작성/수정 공통) */
+/* 이미지 붙여넣기 */
 async function handlePaste(e, target) {
     for (const item of e.clipboardData.items) {
         if (item.type.startsWith("image")) {
             const file = item.getAsFile();
-            const fileRef = ref(storage, `users/${userId}/images/${Date.now()}.png`);
-            await uploadBytes(fileRef, file);
-            const url = await getDownloadURL(fileRef);
+            const imgRef = ref(storage, `users/${userId}/images/${Date.now()}.png`);
+            await uploadBytes(imgRef, file);
+            const url = await getDownloadURL(imgRef);
             target.value += `\n![](${url})\n`;
         }
     }
